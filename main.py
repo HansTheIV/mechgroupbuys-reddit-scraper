@@ -5,9 +5,17 @@ from GroupBuy import GroupBuy
 from datetime import date as d
 debug = True  # enable print statements
 
+"""Returns an instance of a string object representing item type. 
+
+uses the lists of keywords to match the title to the respective item types.
+Many keyboards will not get caught as keyboards (I had to add "ergo", "yeti", and "arisu" to catch specific keyboards.)
+As such, new keyboards with novel names will not trip the regex. However, few enough items will default to misc that 
+they can be manually tagged. 
+"""
 def get_type(title: str):
     keeb = {"108", "104", "19x", "80", "88", "tkl", "8x", "75", "84", "65", "67", "68", "sixty five",
-            "sixty-five", "sixtyfive", "60", "61", "64", "40", "44", "47", "keyboard", "ergo", "yeti"}
+            "sixty-five", "sixtyfive", "60", "61", "64", "40", "44", "47", "keyboard", "ergo", "yeti", "alice",
+            "arisu", }
 
     keycap_types = {"kat", "gmk", "kam", "epbt", "sa", "jtk", "filco", "akko", "npkc", "pbt", "abs", "domikey", "dsa",
                     "dss", "mg"}
@@ -28,6 +36,13 @@ def get_type(title: str):
     return 4
 
 
+""" returns an instance of a string object representing the size/layout of the board.
+Accepts the title of the group buy post
+Uses the lists below to match potential identifiers in the title of the post. In the event no matches are found, it
+is categorized as specialty. For example, TGR alice is technically a 60% (i think), if you asked someone what layout
+they used and they said 60%, you wouldnt expect an alice. As such, if the board doesn't name itself as that size, 
+specialty is probably a fine way to describe it.
+"""
 def get_keeb_size(title: str):
     full_size = {"108", "104", "19x"}  # separate lists allow an updated naming scheme in the event of changes
     tkl = {"80", "88", "tkl", "8x"}  # 8x and 19x are exclusively related to the kbdfans boards but can't hurt
@@ -62,9 +77,15 @@ def get_keeb_size(title: str):
         search_term = ".*" + keyword + ".*"
         if re.search(search_term, title.lower()) is not None:
             return "Forty"
-    return "Misc Size"
+    return "Specialty Layout"
 
 
+""" Returns the possible factors for the end of a group buy.
+Usually, this will be date-restricted. Two dates are usually present in the title, and occasionally only one.
+When there's only one date, it usually means that the restriction on the group buy is unit based (manufacturer will only
+make 250 boards) and will end once manufacturing capacity is reached. 
+the list returnable_factors will begin containing default values which will be overwritten as the method executes
+"""
 def get_end_factors(title: str):  # gb name is separated from dates/quantity by "//".
     units_regex = "[\d]*\s?units"  # I don't think this will ever come into play.
     default_start_date = "No start date set"
@@ -152,14 +173,21 @@ and different year, though: group buys don't run for 12 months
         iso_date_2 = str(current_year) + "-" + get_ISO_num_string(month_2_int) + "-" + get_ISO_num_string(int(day_2))
     return {iso_date_1, iso_date_2}
 
+
+"""Returns a string version of a 2-digit number
+
+Accepts an integer. If the integer is a single digit, it returns the string concatenation of "0" + [number]
+this is to make sure the number is in valid ISO format (august 4, 2021 needs to be 2021-08-04, not 2021-8-4. 
+"""
 def get_ISO_num_string(number: int):
     if number < 10:
         return "0" + str(number)
     else:
         return str(number)
 
-
-def get_vendors(mod_comment: str):  # TODO: splitting each_vendor on a colon causes URLs to break. need to fix.
+""" Returns a dictionary of vendor regions and vendor links.
+"""
+def get_vendors(mod_comment: str):  # TODO: splitting each_vendor on a colon causes URLs to break. need to fix. // SHOULD BE FIXED
     vendors_temp = dict()
     comment_sections = str(mod_comment).split(
         "---")  # comment is split into sections based on the mods placing a "---"
@@ -174,17 +202,34 @@ def get_vendors(mod_comment: str):  # TODO: splitting each_vendor on a colon cau
                         vendor_tuple = each_vendor.split(":")  # must split on colon, otherwise
                         # "east asia: [vendor]" will use "asia" as the vendor link for "east"
                         # first section contains region, second
-                        # contains vendor name + link
-                        vendors_temp[vendor_tuple[0]] = vendor_tuple[1]
+                        # contains vendor name + first portion of link. It gets cut off at https:\\
+                        #                                                                       ^
+                        vendor_link_str = ""
+                        for integer in range(1, len(vendor_tuple)):
+                            vendor_link_str += vendor_tuple[integer]
+                        vendors_temp[vendor_tuple[0]] = vendor_link_str
                 return vendors_temp
             except IndexError:
                 return None
 
 
+""" calls the JSON formatting method of the group buy object passed as a parameter.
+Returns the JSON object. 
+"""
 def to_JSON(group_buy: GroupBuy):
     return group_buy.json_out()
 
 
+""" Finds all prices associated with the item. This can include different keycap kits,  different options for a 
+keyboard, or deskmat prices. Will provide a dictionary of price indexed by kit_name.
+
+For an arbitrary example, for GMK Steve,
+"base": "$134.99"
+"40s": "44.99"
+"novelties": "39.99"
+
+and so on.
+"""
 def get_prices(mod_comment: str, item_type: str):
     temp_prices = dict()
     comment_sections = str(mod_comment).split("---")
